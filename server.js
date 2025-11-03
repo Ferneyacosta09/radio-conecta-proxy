@@ -1,13 +1,9 @@
 import express from "express";
-import fetch from "node-fetch";
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-
-// URL del stream original
 const RADIO_URL = "http://186.29.40.51:8000/stream";
 
-// Evita que Render corte la conexión por tiempo
 app.set('trust proxy', true);
 app.disable('x-powered-by');
 
@@ -22,7 +18,6 @@ app.get("/", async (req, res) => {
       }
     });
 
-    // Configurar cabeceras apropiadas para un stream
     res.writeHead(200, {
       "Content-Type": response.headers.get("content-type") || "audio/mpeg",
       "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -33,7 +28,6 @@ app.get("/", async (req, res) => {
       "Transfer-Encoding": "chunked"
     });
 
-    // Stream binario continuo
     response.body.on("error", (err) => {
       console.error("❌ Error en stream de origen:", err);
       res.end();
