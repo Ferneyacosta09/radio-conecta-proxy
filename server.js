@@ -1,47 +1,33 @@
 import express from "express";
-import httpProxy from "http-proxy-middleware";
-import cors from "cors";
+import fetch from "node-fetch";
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Tu servidor Icecast
-const ICECAST_URL = "http://186.29.40.51:8000/stream";
+const RADIO_URL = "http://186.29.40.51:8000/stream";
 
-app.use(cors());
+app.get("/", async (req, res) => {
+  try {
+    const response = await fetch(RADIO_URL, {
+      headers: {
+        "Icy-MetaData": "1",
+        "User-Agent": "RadioConectaProxy/1.0"
+      }
+    });
 
-// --- Configurar proxy con headers correctos ---
-import { createProxyMiddleware } from "http-proxy-middleware";
+    // Copiamos las cabeceras necesarias
+    res.setHeader("Content-Type", response.headers.get("content-type") || "audio/mpeg");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
 
-app.use(
-  "/",
-  createProxyMiddleware({
-    target: ICECAST_URL,
-    changeOrigin: true,
-    ws: true,
-    followRedirects: true,
-    headers: {
-      "User-Agent": "Mozilla/5.0 (RadioConecta-Proxy)",
-      "Connection": "keep-alive",
-      "Accept": "*/*",
-      "Range": "bytes=0-",
-    },
-    selfHandleResponse: false,
-    onProxyRes(proxyRes, req, res) {
-      // Permitir streaming sin buffering
-      proxyRes.headers["Access-Control-Allow-Origin"] = "*";
-      proxyRes.headers["Content-Type"] = "audio/mpeg";
-      proxyRes.headers["Connection"] = "keep-alive";
-      res.writeHead(200, proxyRes.headers);
-    },
-    onError(err, req, res) {
-      console.error("❌ Error en proxy:", err.message);
-      res.writeHead(502);
-      res.end("Proxy error: " + err.message);
-    },
-  })
-);
+    // Pipea el stream binario directamente
+    response.body.pipe(res);
+  } catch (err) {
+    console.error("❌ Error al conectar con la emisora:", err);
+    res.status(500).send("Error al conectar con la emisora.");
+  }
+});
 
 app.listen(PORT, () => {
-  console.log(`🎧 Proxy HTTPS activo en puerto ${PORT}`);
+  console.log(`🎧 Proxy activo en puerto ${PORT}`);
 });
