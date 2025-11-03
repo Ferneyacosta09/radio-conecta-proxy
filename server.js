@@ -1,46 +1,47 @@
 import express from "express";
-import http from "http";
+import httpProxy from "http-proxy-middleware";
 import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Tu servidor Icecast
+const ICECAST_URL = "http://186.29.40.51:8000/stream";
+
 app.use(cors());
 
-// Proxy manual hacia el stream Icecast
-app.get("/", (req, res) => {
-  const options = {
-    host: "186.29.40.51",
-    port: 8000,
-    path: "/stream",
+// --- Configurar proxy con headers correctos ---
+import { createProxyMiddleware } from "http-proxy-middleware";
+
+app.use(
+  "/",
+  createProxyMiddleware({
+    target: ICECAST_URL,
+    changeOrigin: true,
+    ws: true,
+    followRedirects: true,
     headers: {
-      "User-Agent": "Mozilla/5.0",
-      "Accept": "*/*",
-      "Icy-MetaData": "1", // Para compatibilidad con Icecast
-    },
-  };
-
-  const proxy = http.get(options, (stream) => {
-    // Pasamos los encabezados del stream al cliente
-    res.writeHead(200, {
-      "Content-Type": stream.headers["content-type"] || "audio/mpeg",
+      "User-Agent": "Mozilla/5.0 (RadioConecta-Proxy)",
       "Connection": "keep-alive",
-      "Transfer-Encoding": "chunked",
-      "Accept-Ranges": "bytes",
-    });
-
-    stream.pipe(res);
-  });
-
-  proxy.on("error", (err) => {
-    console.error("Error conectando con el stream:", err.message);
-    if (!res.headersSent) {
-      res.writeHead(500, { "Content-Type": "text/plain" });
-    }
-    res.end("Error al conectar con la emisora.");
-  });
-});
+      "Accept": "*/*",
+      "Range": "bytes=0-",
+    },
+    selfHandleResponse: false,
+    onProxyRes(proxyRes, req, res) {
+      // Permitir streaming sin buffering
+      proxyRes.headers["Access-Control-Allow-Origin"] = "*";
+      proxyRes.headers["Content-Type"] = "audio/mpeg";
+      proxyRes.headers["Connection"] = "keep-alive";
+      res.writeHead(200, proxyRes.headers);
+    },
+    onError(err, req, res) {
+      console.error("❌ Error en proxy:", err.message);
+      res.writeHead(502);
+      res.end("Proxy error: " + err.message);
+    },
+  })
+);
 
 app.listen(PORT, () => {
-  console.log(`🎧 Proxy de radio activo en puerto ${PORT}`);
+  console.log(`🎧 Proxy HTTPS activo en puerto ${PORT}`);
 });
