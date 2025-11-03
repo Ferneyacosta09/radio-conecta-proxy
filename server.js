@@ -1,33 +1,38 @@
 import express from "express";
-import fetch from "node-fetch";
+import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app = express();
-const PORT = process.env.PORT || 10000;
 
+const PORT = process.env.PORT || 10000;
 const RADIO_URL = "http://186.29.40.51:8000/stream";
 
-app.get("/", async (req, res) => {
-  try {
-    const response = await fetch(RADIO_URL, {
-      headers: {
-        "Icy-MetaData": "1",
-        "User-Agent": "RadioConectaProxy/1.0"
+app.use(
+  "/",
+  createProxyMiddleware({
+    target: RADIO_URL,
+    changeOrigin: true,
+    ws: false,
+    onProxyRes: (proxyRes, req, res) => {
+      // Corrige encabezados ICY → HTTP
+      if (proxyRes.statusMessage && proxyRes.statusMessage.startsWith("ICY")) {
+        proxyRes.statusMessage = "OK";
       }
-    });
 
-    // Copiamos las cabeceras necesarias
-    res.setHeader("Content-Type", response.headers.get("content-type") || "audio/mpeg");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-
-    // Pipea el stream binario directamente
-    response.body.pipe(res);
-  } catch (err) {
-    console.error("❌ Error al conectar con la emisora:", err);
-    res.status(500).send("Error al conectar con la emisora.");
-  }
-});
+      // Forzamos encabezados para mantener streaming
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("Cache-Control", "no-cache");
+    },
+    onError: (err, req, res) => {
+      console.error("❌ Error en el proxy:", err.message);
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "text/plain" });
+      }
+      res.end("Error en el proxy de radio.");
+    },
+  })
+);
 
 app.listen(PORT, () => {
-  console.log(`🎧 Proxy activo en puerto ${PORT}`);
+  console.log(`🎧 Proxy HTTPS activo en puerto ${PORT}`);
 });
