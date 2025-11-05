@@ -3,32 +3,30 @@ import http from "http";
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-
-// URL del stream original
 const RADIO_URL = "http://186.29.40.51:8000/stream";
 
 app.get("/", (req, res) => {
-  console.log("🎧 Nueva conexión de cliente al proxy...");
+  console.log("🎧 Nueva conexión al proxy...");
 
-  // Configurar cabeceras de respuesta
   res.setHeader("Content-Type", "audio/mpeg");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", "*"); // 🔥 Importante para tu web
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Connection", "close");
+  res.setHeader("Access-Control-Allow-Origin", "*");
 
-  // Hacer la petición HTTP al servidor de la emisora
   const radioReq = http.get(RADIO_URL, (radioRes) => {
-    radioRes.pipe(res); // retransmitir flujo binario directamente
+    radioRes.pipe(res);
   });
 
   radioReq.on("error", (err) => {
-    console.error("❌ Error al conectar con la emisora:", err.message);
-    res.status(500).send("Error al conectar con la emisora.");
+    console.error("❌ Error de conexión:", err.message);
+    if (!res.headersSent) res.status(502).end("Error al conectar con la emisora.");
   });
 
+  // 👉 Si el cliente cierra, cortamos el stream para evitar conexiones huérfanas
   req.on("close", () => {
     console.log("🔌 Cliente desconectado");
     radioReq.destroy();
+    res.end();
   });
 });
 
