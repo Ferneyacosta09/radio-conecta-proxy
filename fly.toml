@@ -1,0 +1,26 @@
+app = "radio-conecta-proxy"
+primary_region = "gru"
+
+[env]
+PORT = "3000"
+
+[[services]]
+auto_start_machines = true
+auto_stop_machines = true
+internal_port = 3000
+min_machines_running = 1
+processes = ["app"]
+protocol = "tcp"
+
+  [[services.ports]]
+  handlers = ["http"]
+  port = 80
+
+  [[services.ports]]
+  handlers = ["tls", "http"]
+  port = 443
+
+[[vm]]
+cpu_kind = "shared"
+cpus = 1
+memory = "1gb"
