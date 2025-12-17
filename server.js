@@ -2,34 +2,48 @@ import express from "express";
 import http from "http";
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-const RADIO_URL = "http://200.119.37.140:8000/stream";
+const PORT = process.env.PORT || 8080;
+
+/**
+ * SOLO ESTA LINEA SE CAMBIA SI CAMBIA LA IP
+ */
+const ICECAST_HOST = "200.119.37.140";
+const ICECAST_PORT = 8000;
+const ICECAST_MOUNT = "/stream";
 
 app.get("/", (req, res) => {
-  console.log("🎧 Nueva conexión al proxy...");
+  console.log("🎧 Oyente conectado");
 
   res.setHeader("Content-Type", "audio/mpeg");
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  res.setHeader("Connection", "close");
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
 
-  const radioReq = http.get(RADIO_URL, (radioRes) => {
-    radioRes.pipe(res);
+  const icecastReq = http.get({
+    hostname: ICECAST_HOST,
+    port: ICECAST_PORT,
+    path: ICECAST_MOUNT,
+    headers: {
+      "User-Agent": "Fly-Proxy"
+    }
+  }, (icecastRes) => {
+    icecastRes.pipe(res);
   });
 
-  radioReq.on("error", (err) => {
-    console.error("❌ Error de conexión:", err.message);
-    if (!res.headersSent) res.status(502).end("Error al conectar con la emisora.");
+  icecastReq.on("error", (err) => {
+    console.error("❌ Error Icecast:", err.message);
+    if (!res.headersSent) {
+      res.status(502).end("Icecast no disponible");
+    }
   });
 
-  // 👉 Si el cliente cierra, cortamos el stream para evitar conexiones huérfanas
   req.on("close", () => {
-    console.log("🔌 Cliente desconectado");
-    radioReq.destroy();
-    res.end();
+    console.log("🔌 Oyente desconectado");
+    icecastReq.destroy();
   });
 });
 
 app.listen(PORT, () => {
   console.log(`✅ Proxy activo en puerto ${PORT}`);
 });
+
